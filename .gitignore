@@ -11,7 +11,7 @@ __pycache__/
 env/
 venv/
 ENV/
-.env
+app/.env
 
 # Windows
 app.log

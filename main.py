@@ -1,6 +1,5 @@
 import asyncio
-
-from opc_to_mysql import *
+from app.opc_to_mysql import *
 
 #--------------------------------------------------Настройка логирования----------------------------------------------------------#
 logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a',

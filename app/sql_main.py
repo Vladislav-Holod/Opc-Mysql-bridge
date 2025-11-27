@@ -1,6 +1,9 @@
 import pymysql
 import pymysql.cursors
-import configurate
+
+import app.configurate as configurate
+
+
 def create_connectio():
     """Подключение к бд"""
     try:

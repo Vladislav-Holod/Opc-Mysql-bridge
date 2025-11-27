@@ -2,7 +2,7 @@ import datetime
 import logging
 from typing import Any
 from asyncua import Client
-from sql_main import *
+from app.sql_main import *
 
 
 async def save_read(node, default=0):
