@@ -4,7 +4,7 @@ import pymysql.cursors
 import app.configurate as configurate
 
 
-def create_connectio():
+def create_connection():
     """Подключение к бд"""
     try:
         connection=pymysql.connect(
@@ -48,9 +48,10 @@ def execute_query(connection, query, params=None):
 
 def param_kot():
     """Адреса нод в бд (adrees node in mysql)"""
+
     try:
-        connect=create_connectio()
-        sel="Select idkot,adr,Pgw,Twp,Two,Pwp,Pwo,flag FROM param_kot "
+        connect=create_connection()
+        sel="Select idkot,adr,Pgw,Twp,Two,Pwp,Pwo,flag FROM param_kot where flag=-1"
         parametr=execute_read_query(connect,sel)
         return parametr
     finally:

@@ -14,7 +14,7 @@ async def save_read(node, default=0):
         value = await node.read_value()
         return value if value is not None else default
     except Exception as e:
-        logging.info(f'Ошибка ноды {e} {node}')
+        logging.error(f'Ошибка ноды {e} {node}')
         return default
 
 
@@ -23,27 +23,22 @@ async def opc_parse(server_url: str) -> dict:
     Парсим ноды по адресу из бд по функции param_kot
     (Parsing nods on address in Mysql by func param_kot)
     """
-
     param = param_kot()
     values = {}
     async with Client(server_url) as client:
         for i in param:
-            if i['flag'] == -1:
-                node_pwg = client.get_node(f"ns=1;s={i['Pgw']}")
-                node_twp = client.get_node(f"ns=1;s={i['Twp']}")
-                node_two = client.get_node(f"ns=1;s={i['Two']}")
-                node_pwp = client.get_node(f"ns=1;s={i['Pwp']}")
-                node_pwo = client.get_node(f"ns=1;s={i['Pwo']}")
+            node_pwg = client.get_node(f"ns=1;s={i['Pgw']}")
+            node_twp = client.get_node(f"ns=1;s={i['Twp']}")
+            node_two = client.get_node(f"ns=1;s={i['Two']}")
+            node_pwp = client.get_node(f"ns=1;s={i['Pwp']}")
+            node_pwo = client.get_node(f"ns=1;s={i['Pwo']}")
 
-                values[i['idkot']] = {'Pgw': await save_read(node_pwg) / 100,
-                                      'Twp': await save_read(node_twp),
-                                      'Two': await save_read(node_two),
-                                      'Pwp': await save_read(node_pwp) / 100,
-                                      'Pwo': await save_read(node_pwo) / 100,
-                                      'adr': i['adr'] }
-            else:
-                print(F'⛔️ Не опрашиваются - {i['adr']}')
-                continue
+            values[i['idkot']] = {'Pgw': await save_read(node_pwg) / 100,
+                                  'Twp': await save_read(node_twp),
+                                  'Two': await save_read(node_two),
+                                  'Pwp': await save_read(node_pwp) / 100,
+                                  'Pwo': await save_read(node_pwo) / 100,
+                                  'adr': i['adr'] }
     return values
 
 def sql_parse_by_idkot(value: dict) -> list:
@@ -54,7 +49,7 @@ def sql_parse_by_idkot(value: dict) -> list:
     """
     if not value:
         return [{}]
-    connect = create_connectio()
+    connect = create_connection()
     try:
         result_keys = list(value.keys())
         placeholders = ','.join(['%s'] * len(result_keys))
@@ -133,29 +128,28 @@ def upsert_new(new_data: dict):
     """
     if not new_data:
         return
-    connect = create_connectio()
-    cursor = None
+    connect = create_connection()
     try:
-        cursor = connect.cursor()
         today = datetime.datetime.today().date()
-        for idkot, values in new_data.items():
-            adr = values['adr']
-            pgw = values['Pgw']
-            twp = values['Twp']
-            two = values['Two']
-            pwp = values['Pwp']
-            pwo = values['Pwo']
-            cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
-            exists = cursor.fetchone()
-            if exists:
-                update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, adr)
-            else:
-                insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo)
+        with connect.cursor() as cursor:
+            for idkot, values in new_data.items():
+                adr = values['adr']
+                pgw = values['Pgw']
+                twp = values['Twp']
+                two = values['Two']
+                pwp = values['Pwp']
+                pwo = values['Pwo']
+                cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
+                exists = cursor.fetchone()
+                if exists:
+                    update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, adr)
+                else:
+                    insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo)
 
         connect.commit()
         print(f"[INFO] ✅ Все данные за {today} успешно обработаны")
-
+    except Exception as e:
+        logging.error(f'Ошибка при upsert new {e}')
+        connect.rollback()
     finally:
-        if cursor:
-            cursor.close()
         close_connection(connect)
