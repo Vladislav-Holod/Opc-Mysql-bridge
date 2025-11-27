@@ -44,9 +44,7 @@ async def opc_parse(server_url: str) -> dict:
             else:
                 print(F'⛔️ Не опрашиваются - {i['adr']}')
                 continue
-
     return values
-
 
 def sql_parse_by_idkot(value: dict) -> list:
     """
@@ -54,7 +52,6 @@ def sql_parse_by_idkot(value: dict) -> list:
     (Parse mysql for comparison is value OPC)
 
     """
-
     if not value:
         return [{}]
     connect = create_connectio()
@@ -86,7 +83,6 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
         db_vals = db_dict[idkot]
         summed = {'adr': opc_vals['adr']}
         status_opc = False
-
         for param in params:
             opc_val = opc_vals[param]
             db_val = db_vals.get(param)
@@ -111,19 +107,37 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
 
     return result
 
+
+def insert_record(cursor, idkot: int, adr: str, dateizm, pgw, twp, two, pwp, pwo):
+    query = """
+        INSERT INTO enrkoteln (idkot, adr, Dateizm, PGaz, TGaz, Pgw, Twp, Two, Pwp, Pwo)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    """
+    cursor.execute(query, (idkot, adr, dateizm, 0.0, 0, pgw, twp, two, pwp, pwo))
+    print(f"➕ Добавлена запись для {idkot} ({adr}) за {dateizm}")
+
+
+def update_record(cursor, idkot: int, dateizm, pgw, twp, two, pwp, pwo, adr: float):
+    query = """
+        UPDATE enrkoteln
+        SET PGaz = %s, TGaz = %s, Pgw = %s, Twp = %s, Two = %s, Pwp = %s, Pwo = %s
+        WHERE idkot = %s AND Dateizm = %s
+    """
+    cursor.execute(query, (0.0, 0, pgw, twp, two, pwp, pwo, idkot, dateizm))
+    print(f"🔄 Обновлена запись для {adr}({idkot}) за {dateizm}")
+
+
 def upsert_new(new_data: dict):
     """
     Добавляем новые значения (append new value in mysql)
     """
     if not new_data:
         return
-
     connect = create_connectio()
     cursor = None
     try:
         cursor = connect.cursor()
         today = datetime.datetime.today().date()
-
         for idkot, values in new_data.items():
             adr = values['adr']
             pgw = values['Pgw']
@@ -131,26 +145,12 @@ def upsert_new(new_data: dict):
             two = values['Two']
             pwp = values['Pwp']
             pwo = values['Pwo']
-
             cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
             exists = cursor.fetchone()
-
             if exists:
-                query = """
-                    UPDATE enrkoteln
-                    SET PGaz = %s, TGaz = %s, Pgw = %s, Twp = %s, Two = %s, Pwp = %s, Pwo = %s
-                    WHERE idkot = %s AND Dateizm = %s
-                    """
-                cursor.execute(query, (0.0, 0, pgw, twp, two, pwp, pwo, idkot, today))
-                print(
-                    f"🔄 Обновлена запись для {adr}({idkot}) за {today}")
+                update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, adr)
             else:
-                query = """
-                    INSERT INTO enrkoteln (idkot, adr, Dateizm, PGaz, TGaz, Pgw, Twp, Two, Pwp, Pwo)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """
-                cursor.execute(query, (idkot, adr, today, 0.0, 0, pgw, twp, two, pwp, pwo))
-                print(f"➕ Добавлена запись для {idkot} ({adr}) за {today}")
+                insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo)
 
         connect.commit()
         print(f"[INFO] ✅ Все данные за {today} успешно обработаны")
