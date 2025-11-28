@@ -1,11 +1,18 @@
 import asyncio
 from app.opc_to_mysql import *
+import sys
+from logging.handlers import TimedRotatingFileHandler
 
 #--------------------------------------------------Настройка логирования----------------------------------------------------------#
-logging.basicConfig(level=logging.INFO, filename='app.log', filemode='a',
-                    format='[%(asctime)s] {%(pathname)s:%(lineno)d} %(levelname)s - %(message)s', datefmt='%H:%M:%S')
+file_log = TimedRotatingFileHandler('Log.log',when='D',interval=7,backupCount=1,encoding='utf-8')
+console_out = logging.StreamHandler(sys.stdout)
 
-logging.getLogger("asyncua.client.client").setLevel(logging.WARNING)
+logging.basicConfig (handlers=(file_log, console_out),
+                     format='|%(asctime)s| [%(levelname)s]: %(message)s',
+                     datefmt='%m.%d.%Y %H:%M:%S',
+                     level=logging.INFO)
+
+logging.getLogger("asyncua").setLevel(logging.WARNING)
 #---------------------------------------------------------------------------------------------------------------------------------#
 
 server_url = configurate.SERVER_URL
@@ -15,17 +22,15 @@ async def main():
     """ Основной цикл (Base cycle) """
     while True:
         try:
-            print('[INFO] Начало опроса...')
+            logging.info('Начала опроса')
             result_opc = await opc_parse(server_url)
             result_sql = await asyncio.to_thread(sql_parse_by_idkot, result_opc)
             result_operation = merge_opc_and_db(result_opc, result_sql)
             await asyncio.to_thread(upsert_new, result_operation)
-            print('[INFO] Опрос завершен ✅\n\n')
-            logging.info("\nОпрос завершен\n")
+            logging.info("Опрос завершен")
             await asyncio.sleep(configurate.TIME_CHEAK)
 
         except Exception as e:
-            print(f'[ERROR] Ошибка {e}')
             logging.error(f'Ошибка при выполнении {e}🔥\n\n')
             await asyncio.sleep(600)
 

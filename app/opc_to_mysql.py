@@ -3,7 +3,7 @@ import logging
 from typing import Any
 from asyncua import Client
 from app.sql_main import *
-
+from asyncua.ua.uaerrors import BadNodeIdUnknown
 
 async def save_read(node, default=0):
     """
@@ -13,10 +13,13 @@ async def save_read(node, default=0):
     try:
         value = await node.read_value()
         return value if value is not None else default
+
+    except BadNodeIdUnknown:  #Обработка ошибки если в бд адрес ноды Null, то без лога возврат на дефолт
+        return default
+
     except Exception as e:
         logging.error(f'Ошибка ноды {e} {node}')
         return default
-
 
 async def opc_parse(server_url: str) -> dict:
     """
@@ -97,9 +100,7 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
             result[idkot] = summed
         if not status_opc:
             message = f"⛔️ Нет связи с OPC для {opc_vals['adr']} (idkot={idkot}) — Будет пропущена"
-            print(message)
             logging.error(message)
-
     return result
 
 
@@ -109,17 +110,15 @@ def insert_record(cursor, idkot: int, adr: str, dateizm, pgw, twp, two, pwp, pwo
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     cursor.execute(query, (idkot, adr, dateizm, 0.0, 0, pgw, twp, two, pwp, pwo))
-    print(f"➕ Добавлена запись для {idkot} ({adr}) за {dateizm}")
 
 
-def update_record(cursor, idkot: int, dateizm, pgw, twp, two, pwp, pwo, adr: float):
+def update_record(cursor, idkot: int, dateizm, pgw, twp, two, pwp, pwo):
     query = """
         UPDATE enrkoteln
         SET PGaz = %s, TGaz = %s, Pgw = %s, Twp = %s, Two = %s, Pwp = %s, Pwo = %s
         WHERE idkot = %s AND Dateizm = %s
     """
     cursor.execute(query, (0.0, 0, pgw, twp, two, pwp, pwo, idkot, dateizm))
-    print(f"🔄 Обновлена запись для {adr}({idkot}) за {dateizm}")
 
 
 def upsert_new(new_data: dict):
@@ -142,12 +141,12 @@ def upsert_new(new_data: dict):
                 cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
                 exists = cursor.fetchone()
                 if exists:
-                    update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, adr)
+                    update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo)
                 else:
                     insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo)
 
         connect.commit()
-        print(f"[INFO] ✅ Все данные за {today} успешно обработаны")
+        logging.info(f"✅ Все данные за {today} успешно обработаны")
     except Exception as e:
         logging.error(f'Ошибка при upsert new {e}')
         connect.rollback()
