@@ -2,8 +2,12 @@ import datetime
 import logging
 from typing import Any
 from asyncua import Client
+from dateutil.utils import today
+
 from app.sql_main import *
 from asyncua.ua.uaerrors import BadNodeIdUnknown
+import pprint
+
 
 async def save_read(node, default=0):
     """
@@ -14,12 +18,13 @@ async def save_read(node, default=0):
         value = await node.read_value()
         return value if value is not None else default
 
-    except BadNodeIdUnknown:  #Обработка ошибки если в бд адрес ноды Null, то без лога возврат на дефолт
+    except BadNodeIdUnknown:  # Обработка ошибки если в бд адрес ноды Null, то без лога возврат на дефолт
         return default
 
     except Exception as e:
         logging.error(f'Ошибка ноды {e} {node}')
         return default
+
 
 async def opc_parse(server_url: str) -> dict:
     """
@@ -41,8 +46,10 @@ async def opc_parse(server_url: str) -> dict:
                                   'Two': await save_read(node_two),
                                   'Pwp': await save_read(node_pwp) / 100,
                                   'Pwo': await save_read(node_pwo) / 100,
-                                  'adr': i['adr'] }
+                                  'adr': i['adr']}
+    logging.info("ДАННЫЕ С OPC: %s", pprint.pformat(values))
     return values
+
 
 def sql_parse_by_idkot(value: dict) -> list:
     """
@@ -63,6 +70,7 @@ def sql_parse_by_idkot(value: dict) -> list:
             GROUP BY idkot
         """
         result = execute_read_query(connect, query, params=result_keys)
+        logging.info("ДАННЫЕ С БАЗЫ ДАННЫХ: %s", pprint.pformat(result))
         return result
     finally:
         close_connection(connect)
@@ -72,6 +80,7 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
     """
     Сравнением opc и бд и получение среднего числа  (comparison opc and mysql)
     """
+    today = datetime.datetime.today().date()
     db_dict = {row['idkot']: row for row in db_data_list}
     result = {}
     params = ['Pgw', 'Twp', 'Two', 'Pwp', 'Pwo']
@@ -79,28 +88,33 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
         if idkot not in db_dict:
             continue
         db_vals = db_dict[idkot]
+        data_today = (db_vals['MAX(Dateizm)'] != today)
         summed = {'adr': opc_vals['adr']}
         status_opc = False
         for param in params:
             opc_val = opc_vals[param]
             db_val = db_vals.get(param)
-            if opc_val!=0:
-                status_opc = True
-                if db_val is not None:
-                    summed[param] = round((opc_val + db_val)/2, 2)
+            if data_today:
+                if opc_val > 1.0:
+                    summed[param] = round(opc_val, 2)
+                    status_opc = True
                 else:
-                    summed[param] = opc_val
+                    summed[param] = db_val if db_val is not None else 0.0
             else:
-                if db_val is not None:
-                    summed[param] = db_val
+                if opc_val > 1.0:
+                    status_opc = True
+                    if db_val is not None and db_val!=0:
+                        summed[param] = round((opc_val + db_val) / 2, 2)
+                    else:
+                        summed[param] = round(opc_val, 2)
                 else:
-                    summed[param] = 0.0
-
+                    summed[param] = db_val if db_val is not None else 0.0
         if status_opc:
             result[idkot] = summed
         if not status_opc:
             message = f"⛔️ Нет связи с OPC для {opc_vals['adr']} (idkot={idkot}) — Будет пропущена"
             logging.error(message)
+    logging.info("ДАННЫЕ КОТОРЫЕ ИДУТ В БАЗУ ДАННЫХ: %s", pprint.pformat(result))
     return result
 
 

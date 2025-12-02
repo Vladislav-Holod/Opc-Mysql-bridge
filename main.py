@@ -4,6 +4,7 @@ import sys
 from logging.handlers import TimedRotatingFileHandler
 
 #--------------------------------------------------Настройка логирования----------------------------------------------------------#
+sys.stdout.reconfigure(line_buffering=True)
 file_log = TimedRotatingFileHandler('Log.log',when='D',interval=7,backupCount=1,encoding='utf-8')
 console_out = logging.StreamHandler(sys.stdout)
 
@@ -40,3 +41,4 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print('Скрипт остановлен')
+    
