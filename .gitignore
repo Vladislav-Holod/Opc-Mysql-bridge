@@ -12,6 +12,6 @@ env/
 venv/
 ENV/
 app/.env
-
+Log.log
 # Windows
 app.log

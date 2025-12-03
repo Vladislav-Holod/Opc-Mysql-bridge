@@ -18,7 +18,6 @@ logging.getLogger("asyncua").setLevel(logging.WARNING)
 
 server_url = configurate.SERVER_URL
 
-
 async def main():
     """ Основной цикл (Base cycle) """
     while True:
