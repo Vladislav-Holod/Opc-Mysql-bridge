@@ -2,12 +2,8 @@ import datetime
 import logging
 from typing import Any
 from asyncua import Client
-from dateutil.utils import today
-
 from app.sql_main import *
 from asyncua.ua.uaerrors import BadNodeIdUnknown
-import pprint
-
 
 async def save_read(node, default=0):
     """
@@ -47,7 +43,6 @@ async def opc_parse(server_url: str) -> dict:
                                   'Pwp': await save_read(node_pwp) / 100,
                                   'Pwo': await save_read(node_pwo) / 100,
                                   'adr': i['adr']}
-    logging.info("ДАННЫЕ С OPC: %s", pprint.pformat(values))
     return values
 
 
@@ -70,7 +65,6 @@ def sql_parse_by_idkot(value: dict) -> list:
             GROUP BY idkot
         """
         result = execute_read_query(connect, query, params=result_keys)
-        logging.info("ДАННЫЕ С БАЗЫ ДАННЫХ: %s", pprint.pformat(result))
         return result
     finally:
         close_connection(connect)
@@ -78,6 +72,7 @@ def sql_parse_by_idkot(value: dict) -> list:
 
 def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
     """
+                            [Основная логика]
     Сравнением opc и бд и получение среднего числа  (comparison opc and mysql)
     """
     today = datetime.datetime.today().date()
@@ -114,7 +109,6 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
         if not status_opc:
             message = f"⛔️ Нет связи с OPC для {opc_vals['adr']} (idkot={idkot}) — Будет пропущена"
             logging.error(message)
-    logging.info("ДАННЫЕ КОТОРЫЕ ИДУТ В БАЗУ ДАННЫХ: %s", pprint.pformat(result))
     return result
 
 
