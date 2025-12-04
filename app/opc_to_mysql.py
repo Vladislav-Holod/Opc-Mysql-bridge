@@ -4,6 +4,8 @@ from typing import Any
 from asyncua import Client
 from app.sql_main import *
 from asyncua.ua.uaerrors import BadNodeIdUnknown
+import pprint
+
 
 async def save_read(node, default=0):
     """
@@ -36,13 +38,17 @@ async def opc_parse(server_url: str) -> dict:
             node_two = client.get_node(f"ns=1;s={i['Two']}")
             node_pwp = client.get_node(f"ns=1;s={i['Pwp']}")
             node_pwo = client.get_node(f"ns=1;s={i['Pwo']}")
+            k_pwp = float(i['kPwp'])
+            k_pwo = float(i['kPwo'])
+            k_pgw = float(i['kPgw'])
 
-            values[i['idkot']] = {'Pgw': await save_read(node_pwg) / 100,
+            values[i['idkot']] = {'Pgw': await save_read(node_pwg) * k_pgw,
                                   'Twp': await save_read(node_twp),
                                   'Two': await save_read(node_two),
-                                  'Pwp': await save_read(node_pwp) / 100,
-                                  'Pwo': await save_read(node_pwo) / 100,
+                                  'Pwp': await save_read(node_pwp) * k_pwp,
+                                  'Pwo': await save_read(node_pwo) * k_pwo,
                                   'adr': i['adr']}
+    pprint.pprint(values)
     return values
 
 
@@ -90,15 +96,15 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
             opc_val = opc_vals[param]
             db_val = db_vals.get(param)
             if data_today:
-                if opc_val > 1.0:
+                if opc_val > 0.2:
                     summed[param] = round(opc_val, 2)
                     status_opc = True
                 else:
                     summed[param] = db_val if db_val is not None else 0.0
             else:
-                if opc_val > 1.0:
+                if opc_val > 0.2:
                     status_opc = True
-                    if db_val is not None and db_val!=0:
+                    if db_val is not None and db_val != 0:
                         summed[param] = round((opc_val + db_val) / 2, 2)
                     else:
                         summed[param] = round(opc_val, 2)
