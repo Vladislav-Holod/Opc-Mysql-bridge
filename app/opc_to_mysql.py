@@ -38,6 +38,7 @@ async def opc_parse(server_url: str) -> dict:
             node_two = client.get_node(f"ns=1;s={i['Two']}")
             node_pwp = client.get_node(f"ns=1;s={i['Pwp']}")
             node_pwo = client.get_node(f"ns=1;s={i['Pwo']}")
+            node_tnv = client.get_node(f'ns=1;s={i['Tnv']}')
             k_pwp = float(i['kPwp'])
             k_pwo = float(i['kPwo'])
             k_pgw = float(i['kPgw'])
@@ -47,25 +48,26 @@ async def opc_parse(server_url: str) -> dict:
                                   'Two': await save_read(node_two),
                                   'Pwp': await save_read(node_pwp) * k_pwp,
                                   'Pwo': await save_read(node_pwo) * k_pwo,
+                                  'Tnv': await save_read(node_tnv),
                                   'adr': i['adr']}
-    pprint.pprint(values)
+    logging.info("ДАННЫЕ С OPC: %s", pprint.pformat(values))
     return values
 
 
-def sql_parse_by_idkot(value: dict) -> list:
+def sql_parse_by_idkot(values: dict) -> list:
     """
     Парсим базу данных для сравнения с значениями opc
     (Parse mysql for comparison is value OPC)
 
     """
-    if not value:
+    if not values:
         return [{}]
     connect = create_connection()
     try:
-        result_keys = list(value.keys())
+        result_keys = list(values.keys())
         placeholders = ','.join(['%s'] * len(result_keys))
         query = f"""
-            SELECT idkot, MAX(Dateizm), Pgw, Twp, Two, Pwp, Pwo
+            SELECT idkot, MAX(Dateizm), Pgw, Twp, Two, Pwp, Pwo,Tnv
             FROM enrkoteln
             WHERE idkot IN ({placeholders})
             GROUP BY idkot
@@ -84,18 +86,18 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
     today = datetime.datetime.today().date()
     db_dict = {row['idkot']: row for row in db_data_list}
     result = {}
-    params = ['Pgw', 'Twp', 'Two', 'Pwp', 'Pwo']
+    params = ['Pgw', 'Twp', 'Two', 'Pwp', 'Pwo', 'Tnv']
     for idkot, opc_vals in opc_data.items():
         if idkot not in db_dict:
             continue
         db_vals = db_dict[idkot]
-        data_today = (db_vals['MAX(Dateizm)'] != today)
+        data_not_today = (db_vals['MAX(Dateizm)'] != today)
         summed = {'adr': opc_vals['adr']}
         status_opc = False
         for param in params:
             opc_val = opc_vals[param]
             db_val = db_vals.get(param)
-            if data_today:
+            if data_not_today:
                 if opc_val > 0.2:
                     summed[param] = round(opc_val, 2)
                     status_opc = True
@@ -118,21 +120,21 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
     return result
 
 
-def insert_record(cursor, idkot: int, adr: str, dateizm, pgw, twp, two, pwp, pwo):
+def insert_record(cursor, idkot: int, adr: str, dateizm, pgw, twp, two, pwp, pwo, tnv):
     query = """
-        INSERT INTO enrkoteln (idkot, adr, Dateizm, PGaz, TGaz, Pgw, Twp, Two, Pwp, Pwo)
+        INSERT INTO enrkoteln (idkot, adr, Dateizm, PGaz, TGaz, Pgw, Twp, Two, Pwp, Pwo,Tnv)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
-    cursor.execute(query, (idkot, adr, dateizm, 0.0, 0, pgw, twp, two, pwp, pwo))
+    cursor.execute(query, (idkot, adr, dateizm, 0.0, 0, pgw, twp, two, pwp, pwo, tnv))
 
 
-def update_record(cursor, idkot: int, dateizm, pgw, twp, two, pwp, pwo):
+def update_record(cursor, idkot: int, dateizm, pgw, twp, two, pwp, pwo, tnv):
     query = """
         UPDATE enrkoteln
-        SET PGaz = %s, TGaz = %s, Pgw = %s, Twp = %s, Two = %s, Pwp = %s, Pwo = %s
+        SET PGaz = %s, TGaz = %s, Pgw = %s, Twp = %s, Two = %s, Pwp = %s, Pwo = %s, Tnv = %s
         WHERE idkot = %s AND Dateizm = %s
     """
-    cursor.execute(query, (0.0, 0, pgw, twp, two, pwp, pwo, idkot, dateizm))
+    cursor.execute(query, (0.0, 0, pgw, twp, two, pwp, pwo, tnv, idkot, dateizm))
 
 
 def upsert_new(new_data: dict):
@@ -152,12 +154,15 @@ def upsert_new(new_data: dict):
                 two = values['Two']
                 pwp = values['Pwp']
                 pwo = values['Pwo']
+                tnv = values['Tnv']
                 cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
                 exists = cursor.fetchone()
                 if exists:
-                    update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo)
+                    print('ипо апдейд')
+                    # update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, tnv)
                 else:
-                    insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo)
+                    print('Типо вставка')
+                    # insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo,tnv)
 
         connect.commit()
         logging.info(f"✅ Все данные за {today} успешно обработаны")

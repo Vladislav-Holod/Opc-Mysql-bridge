@@ -51,7 +51,7 @@ def param_kot():
 
     try:
         connect=create_connection()
-        sel="Select idkot,adr,Pgw,Twp,Two,Pwp,Pwo,flag,kPwp,kPwo,kPgw FROM param_kot where flag=-1"
+        sel="Select idkot,adr,Pgw,Twp,Two,Pwp,Pwo,flag,kPwp,kPwo,kPgw,Tnv FROM param_kot where flag=-1"
         parametr=execute_read_query(connect,sel)
         return parametr
     finally:
