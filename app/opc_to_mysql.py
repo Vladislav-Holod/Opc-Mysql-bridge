@@ -39,6 +39,7 @@ async def opc_parse(server_url: str) -> dict:
             node_pwp = client.get_node(f"ns=1;s={i['Pwp']}")
             node_pwo = client.get_node(f"ns=1;s={i['Pwo']}")
             node_tnv = client.get_node(f'ns=1;s={i['Tnv']}')
+
             k_pwp = float(i['kPwp'])
             k_pwo = float(i['kPwo'])
             k_pgw = float(i['kPgw'])
@@ -50,7 +51,7 @@ async def opc_parse(server_url: str) -> dict:
                                   'Pwo': await save_read(node_pwo) * k_pwo,
                                   'Tnv': await save_read(node_tnv),
                                   'adr': i['adr']}
-    logging.info("ДАННЫЕ С OPC: %s", pprint.pformat(values))
+
     return values
 
 
@@ -123,7 +124,7 @@ def merge_opc_and_db(opc_data: dict, db_data_list: list) -> dict[Any, Any]:
 def insert_record(cursor, idkot: int, adr: str, dateizm, pgw, twp, two, pwp, pwo, tnv):
     query = """
         INSERT INTO enrkoteln (idkot, adr, Dateizm, PGaz, TGaz, Pgw, Twp, Two, Pwp, Pwo,Tnv)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s,%s)
     """
     cursor.execute(query, (idkot, adr, dateizm, 0.0, 0, pgw, twp, two, pwp, pwo, tnv))
 
@@ -158,11 +159,9 @@ def upsert_new(new_data: dict):
                 cursor.execute("SELECT Id FROM enrkoteln WHERE idkot = %s AND Dateizm = %s", (idkot, today))
                 exists = cursor.fetchone()
                 if exists:
-                    print('ипо апдейд')
-                    # update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, tnv)
+                    update_record(cursor, idkot, today, pgw, twp, two, pwp, pwo, tnv)
                 else:
-                    print('Типо вставка')
-                    # insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo,tnv)
+                    insert_record(cursor, idkot, adr, today, pgw, twp, two, pwp, pwo,tnv)
 
         connect.commit()
         logging.info(f"✅ Все данные за {today} успешно обработаны")
